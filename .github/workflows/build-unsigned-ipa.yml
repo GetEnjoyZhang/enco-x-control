@@ -1,0 +1,51 @@
+name: Build unsigned IPA
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen if needed
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned app
+        run: |
+          xcodebuild \
+            -project EncoXControl.xcodeproj \
+            -scheme EncoXControl \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/DerivedData/Build/Products/Release-iphoneos/EncoXControl.app build/ipa/Payload/
+          cd build/ipa
+          zip -qry ../EncoXControl-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EncoXControl-unsigned
+          path: build/EncoXControl-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
